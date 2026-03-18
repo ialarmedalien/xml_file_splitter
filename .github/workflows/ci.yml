@@ -18,6 +18,8 @@ jobs:
     build_and_test:
         name: Rust project - latest
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
         strategy:
             matrix:
                 toolchain:
