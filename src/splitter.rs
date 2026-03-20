@@ -121,20 +121,6 @@ pub fn read_raw_entry<R: BufRead>(
     Ok(raw)
 }
 
-// pub fn read_raw_entry<R: BufRead>(
-//     reader: &mut Reader<R>,
-//     start_tag_bytes: &[u8],
-//     entry_tag: &[u8],
-// ) -> Result<Vec<u8>> {
-//     let mut interior = Vec::new(); // fresh buffer — no stale bytes
-//     reader.read_to_end_into(quick_xml::name::QName(entry_tag), &mut interior)?;
-
-//     let mut raw = b"<".to_vec();
-//     raw.extend_from_slice(start_tag_bytes);
-//     raw.push(b'>');
-//     raw.extend_from_slice(&interior);
-//     Ok(raw)
-// }
 
 /// Drive the split: distribute all entry elements across chunk files of at
 /// most `chunk_size` entries each.
@@ -144,9 +130,10 @@ pub fn split<R: BufRead>(
     entry_tag: &[u8],
     chunk_size: usize,
     output_prefix: &str,
+    gzip: bool,                   // ← new parameter
 ) -> Result<SplitStats> {
     let mut chunk_index = 1usize;
-    let mut current = ChunkWriter::create(output_prefix, chunk_index, preamble)?;
+    let mut current = ChunkWriter::create(output_prefix, chunk_index, preamble, gzip)?;
     let mut total_entries = 0usize;
     let mut buf = Vec::new();
 
@@ -159,7 +146,7 @@ pub fn split<R: BufRead>(
                     // Finalise the full chunk and open the next one.
                     current.finalise(preamble)?;
                     chunk_index += 1;
-                    current = ChunkWriter::create(output_prefix, chunk_index, preamble)?;
+                    current = ChunkWriter::create(output_prefix, chunk_index, preamble, gzip)?;
                 }
 
                 current.write_entry(&raw)?;
@@ -171,7 +158,6 @@ pub fn split<R: BufRead>(
 
             // Closing root tag or end of file — we're done.
             Event::End(_) | Event::Eof => break,
-
             _ => {}
         }
         buf.clear();
@@ -266,14 +252,14 @@ mod tests {
 
         let mut reader = make_reader(SAMPLE_XML);
         let preamble = read_preamble(&mut reader).unwrap();
-        let stats = split(&mut reader, &preamble, b"entry", 2, &prefix).unwrap();
+        let stats = split(&mut reader, &preamble, b"entry", 2, &prefix, false).unwrap();
 
         assert_eq!(stats.total_entries, 5);
         assert_eq!(stats.chunks, 3); // ceil(5/2) = 3
 
         use crate::writer::chunk_path;
         for (i, expected) in [(1, 2), (2, 2), (3, 1)] {
-            let path = chunk_path(&prefix, i);
+            let path = chunk_path(&prefix, i, false);
             let content = std::fs::read_to_string(&path).unwrap();
             assert_eq!(content.matches("<entry").count(), expected);
             assert!(content.contains("<catalog"));
@@ -289,12 +275,12 @@ mod tests {
 
         let mut reader = make_reader(SAMPLE_XML);
         let preamble = read_preamble(&mut reader).unwrap();
-        let stats = split(&mut reader, &preamble, b"entry", 100, &prefix).unwrap();
+        let stats = split(&mut reader, &preamble, b"entry", 100, &prefix, false).unwrap();
 
         assert_eq!(stats.total_entries, 5);
         assert_eq!(stats.chunks, 1);
 
         use crate::writer::chunk_path;
-        std::fs::remove_file(chunk_path(&prefix, 1)).unwrap();
+        std::fs::remove_file(chunk_path(&prefix, 1, false)).unwrap();
     }
 }

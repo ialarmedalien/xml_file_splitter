@@ -10,6 +10,9 @@ fn main() -> Result<()> {
 
     println!("Input      : {}", args.input.display());
     println!("Chunk size : {} <{}> elements", args.chunk_size, args.element);
+    if args.gzip {
+        println!("Output     : gzip-compressed");
+    }
 
     let gz = splitter::open_gz(&args.input)?;
     let mut reader = quick_xml::reader::Reader::from_reader(gz);
@@ -23,6 +26,7 @@ fn main() -> Result<()> {
         args.element.as_bytes(),
         args.chunk_size,
         &args.output_prefix,
+        args.gzip,
     )?;
 
     println!(

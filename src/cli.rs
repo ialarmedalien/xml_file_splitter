@@ -20,4 +20,8 @@ pub struct Args {
     /// XML element tag name to split on
     #[arg(short, long, default_value = "entry")]
     pub element: String,
+
+    /// Gzip-compress output files (adds .gz extension)
+    #[arg(short, long)]
+    pub gzip: bool,
 }
