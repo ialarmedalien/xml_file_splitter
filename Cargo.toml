@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2024"
 
 [dependencies]
-quick-xml = "0.39.2"
+quick-xml = "0.40.1"
 flate2 = "1.1"
 clap = { version = "4.6", features = ["derive"] }
 anyhow = "1.0"
