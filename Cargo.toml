@@ -2,6 +2,7 @@
 name = "xml_file_splitter"
 version = "0.1.1"
 edition = "2024"
+repository = "https://github.com/ialarmedalien/xml_file_splitter"
 
 [dependencies]
 quick-xml = "0.40.1"
@@ -20,3 +21,8 @@ path = "src/main.rs"
 [dev-dependencies]
 tempfile = "3"
 anyhow   = "1"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
