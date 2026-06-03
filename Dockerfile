@@ -6,14 +6,10 @@
 
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
-ARG RUST_VERSION=1.93.1
-ARG APP_NAME=xml_file_splitter
-
 ################################################################################
 # Create a stage for building the application.
 
-FROM rust:${RUST_VERSION} AS builder
-ARG APP_NAME
+FROM rust:trixie AS builder
 WORKDIR /app
 
 # Copy manifests first for layer caching
@@ -25,7 +21,6 @@ RUN cargo build --release
 
 # Runtime stage
 FROM debian:trixie-slim
-ARG APP_NAME
 
 # Install CA certificates and minimal dependencies
 RUN apt-get update && \
@@ -35,8 +30,8 @@ RUN apt-get update && \
 # Create non-root user
 RUN useradd -r -s /bin/false nonroot
 
-# Copy binary
-COPY --from=builder /app/target/release/${APP_NAME} /usr/local/bin/
+# Copy xml_file_splitter binary
+COPY --from=builder /app/target/release/xml_file_splitter /usr/local/bin/
 
 COPY --chmod=+x ./scripts/entrypoint.sh /app/
 # Use the non-root user to run our application
