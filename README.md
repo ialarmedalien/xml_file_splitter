@@ -56,6 +56,10 @@ path/to/output/dir/chunk_00003.xml.gz
 
 ## Changelog
 
+### v0.1.2
+
+- No code changes. Use [`dist`](https://axodotdev.github.io/cargo-dist/) for generating release binaries.
+
 ### v0.1.1
 
 - Add `gzip` parameter to produce gzip-compressed output files.
