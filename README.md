@@ -56,6 +56,10 @@ path/to/output/dir/chunk_00003.xml.gz
 
 ## Changelog
 
+### v0.1.3
+
+- Minor code change to emit a note to STDOUT when a file has finished writing. Dependency updates.
+
 ### v0.1.2
 
 - No code changes. Use [`dist`](https://axodotdev.github.io/cargo-dist/) for generating release binaries.
