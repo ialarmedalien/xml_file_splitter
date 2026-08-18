@@ -56,10 +56,6 @@ path/to/output/dir/chunk_00003.xml.gz
 
 ## Changelog
 
-### v0.1.4
-
-- No code changes; just dependency updates.
-
 ### v0.1.3
 
 - Minor code change to emit a note to STDOUT when a file has finished writing.
