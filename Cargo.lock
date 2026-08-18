@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "xml_file_splitter"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "clap",
