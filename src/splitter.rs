@@ -122,15 +122,14 @@ pub fn read_raw_entry<R: BufRead>(
 }
 
 
-/// Drive the split: distribute all entry elements across chunk files of at
-/// most `chunk_size` entries each.
+/// Split the entry elements out into files of at most `chunk_size` entries each.
 pub fn split<R: BufRead>(
     reader: &mut Reader<R>,
     preamble: &Preamble,
     entry_tag: &[u8],
     chunk_size: usize,
     output_prefix: &str,
-    gzip: bool,                   // ← new parameter
+    gzip: bool,
 ) -> Result<SplitStats> {
     let mut chunk_index = 1usize;
     let mut current = ChunkWriter::create(output_prefix, chunk_index, preamble, gzip)?;
@@ -171,10 +170,8 @@ pub fn split<R: BufRead>(
     })
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
+// Tests
 #[cfg(test)]
 mod tests {
     use super::*;

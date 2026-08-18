@@ -6,10 +6,6 @@ use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
 /// Everything captured from the XML preamble (declaration + root open tag).
 pub struct Preamble {
     /// Raw bytes of the XML declaration, e.g. `<?xml version="1.0"?>`
@@ -25,10 +21,6 @@ pub struct SplitStats {
     pub total_entries: usize,
     pub chunks: usize,
 }
-
-// ---------------------------------------------------------------------------
-// Internal writer enum
-// ---------------------------------------------------------------------------
 
 /// Wraps either a plain [`File`] or a gzip-compressing [`GzEncoder`] so that
 /// `ChunkWriter` can flush/finish both cleanly without needing downcasting.
@@ -62,10 +54,6 @@ impl OutputWriter {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Public helpers
-// ---------------------------------------------------------------------------
-
 /// Build the output [`PathBuf`] for a given chunk index.
 ///
 /// # Examples
@@ -81,13 +69,12 @@ pub fn chunk_path(prefix: &str, index: usize, gzip: bool) -> PathBuf {
     }
 }
 
-// ---------------------------------------------------------------------------
 // ChunkWriter
-// ---------------------------------------------------------------------------
 
 /// A single open chunk output file.
 pub struct ChunkWriter {
     inner: OutputWriter,
+    path: PathBuf,
     pub entries_written: usize,
 }
 
@@ -105,7 +92,7 @@ impl ChunkWriter {
         };
 
         write_preamble(&mut inner, preamble)?;
-        Ok(Self { inner, entries_written: 0 })
+        Ok(Self { inner, path, entries_written: 0 })
     }
 
     /// Write a raw entry blob (the full `<entry>…</entry>` bytes) to the file.
@@ -120,13 +107,13 @@ impl ChunkWriter {
     pub fn finalise(mut self, preamble: &Preamble) -> Result<()> {
         write_closing_tag(&mut self.inner, &preamble.root_name)?;
         self.inner.finish()?;
+
+        let full_path = self.path.canonicalize().unwrap_or(self.path);
+        println!("Finished writing {}", full_path.display());
+
         Ok(())
     }
 }
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
 
 fn write_preamble(out: &mut OutputWriter, preamble: &Preamble) -> Result<()> {
     if let Some(decl) = &preamble.declaration {
@@ -145,20 +132,14 @@ fn write_closing_tag(out: &mut OutputWriter, root_name: &[u8]) -> Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::{BufReader, Read};
     use flate2::read::GzDecoder;
 
-    // ------------------------------------------------------------------
     // chunk_path
-    // ------------------------------------------------------------------
-
     #[test]
     fn test_chunk_path_plain() {
         assert_eq!(chunk_path("out", 1, false), PathBuf::from("out_00001.xml"));
@@ -179,10 +160,7 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------
     // Preamble / closing-tag helpers
-    // ------------------------------------------------------------------
-
     fn sample_preamble() -> Preamble {
         Preamble {
             declaration: Some(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>".to_vec()),
@@ -191,13 +169,8 @@ mod tests {
         }
     }
 
-    /// Helper: run `write_preamble` via the `OutputWriter::Plain` variant so we
-    /// can capture output into a `Vec<u8>` for assertion without touching the
-    /// file system.
-    ///
-    /// Because `write_preamble` and `write_closing_tag` now accept
-    /// `&mut OutputWriter` rather than `&mut impl Write`, we route through a
-    /// small in-memory shim.
+    /// Helper: run `write_preamble` via the `OutputWriter::Plain` variant and
+    /// capture output into a `Vec<u8>` for assertion without touching the fs.
     fn preamble_to_vec(preamble: &Preamble) -> Vec<u8> {
         let mut buf = Vec::new();
         if let Some(decl) = &preamble.declaration {
@@ -245,10 +218,8 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
     }
 
-    // ------------------------------------------------------------------
+    
     // ChunkWriter — plain output
-    // ------------------------------------------------------------------
-
     #[test]
     fn test_chunk_writer_plain() {
         let tmp = std::env::temp_dir();
@@ -270,10 +241,8 @@ mod tests {
         std::fs::remove_file(&out_path).unwrap();
     }
 
-    // ------------------------------------------------------------------
+    
     // ChunkWriter — gzip output
-    // ------------------------------------------------------------------
-
     #[test]
     fn test_chunk_writer_gzip() {
         let tmp = std::env::temp_dir();
@@ -302,10 +271,8 @@ mod tests {
         std::fs::remove_file(&out_path).unwrap();
     }
 
-    // ------------------------------------------------------------------
+    
     // ChunkWriter — gzip produces a valid gz file (magic bytes check)
-    // ------------------------------------------------------------------
-
     #[test]
     fn test_chunk_writer_gzip_magic_bytes() {
         let tmp = std::env::temp_dir();
