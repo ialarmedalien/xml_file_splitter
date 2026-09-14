@@ -7,7 +7,7 @@ use quick_xml::reader::Reader;
 use crate::writer::{ChunkWriter, Preamble, SplitStats};
 
 /// Open a gzip-compressed file and return a buffered reader over it.
-pub fn open_gz(path: &std::path::PathBuf) -> Result<impl BufRead> {
+pub fn open_gz<P: AsRef<std::path::Path>>(path: P) -> Result<impl BufRead> {
     use flate2::read::GzDecoder;
     use std::{fs::File, io::BufReader};
     Ok(BufReader::new(GzDecoder::new(File::open(path)?)))
@@ -217,6 +217,37 @@ mod tests {
     fn test_read_preamble_eof_error() {
         let mut reader = make_reader("<?xml version=\"1.0\"?>");
         assert!(read_preamble(&mut reader).is_err());
+    }
+
+    #[test]
+    fn test_read_raw_entry_eof_error() {
+        let mut reader = make_reader("<root><entry>unfinished");
+        read_preamble(&mut reader).unwrap();
+        
+        let mut buf = Vec::new();
+        let start_bytes = loop {
+            match reader.read_event_into(&mut buf).unwrap() {
+                Event::Start(e) if e.name().as_ref() == b"entry" => break e.to_owned(),
+                Event::Eof => panic!("no entry found"),
+                _ => buf.clear(),
+            }
+        };
+
+        assert!(read_raw_entry(&mut reader, &start_bytes).is_err());
+    }
+
+    #[test]
+    fn test_open_gz_invalid_file() {
+        let tmp = std::env::temp_dir();
+        let path = tmp.join("not_a_gz.txt");
+        std::fs::write(&path, b"this is just plain text").unwrap();
+        
+        let result = open_gz(path.clone());
+        if let Ok(mut reader) = result {
+            let mut buf = [0u8; 10];
+            assert!(std::io::Read::read(&mut reader, &mut buf).is_err());
+        }
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

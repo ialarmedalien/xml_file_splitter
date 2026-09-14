@@ -107,6 +107,28 @@ fn assert_gzip_magic(path: &std::path::Path) {
     );
 }
 
+/// Helper to run the splitter with a custom input file and verify results.
+fn run_with_input(input_path: &std::path::Path, chunk_size: usize, gzip: bool, validate: bool) -> Result<xml_file_splitter::writer::SplitStats> {
+    let tmp = tempfile::tempdir()?;
+    let prefix = tmp.path().join("chunk").to_str().unwrap().to_string();
+
+    let gz = splitter::open_gz(input_path)?;
+    let mut reader = quick_xml::reader::Reader::from_reader(gz);
+    reader.config_mut().trim_text(false);
+
+    let preamble = splitter::read_preamble(&mut reader)?;
+    let stats = splitter::split(
+        &mut reader,
+        &preamble,
+        b"entry",
+        chunk_size,
+        &prefix,
+        gzip,
+        validate,
+    )?;
+    Ok(stats)
+}
+
 // XML output
 #[test]
 fn test_split_chunk_size_20() {
@@ -123,6 +145,35 @@ fn test_split_chunk_size_4() {
     run_and_compare(4, false, true).expect("splitter failed for chunk_size=4");
 }
 
+#[test]
+fn test_split_chunk_size_1() {
+    let input = common::input_path();
+    let stats = run_with_input(&input, 1, false, true).expect("splitter failed for chunk_size=1");
+    
+    // input.xml.gz has 15 entries
+    assert_eq!(stats.total_entries, 15);
+    assert_eq!(stats.chunks, 15);
+}
+
+#[test]
+fn test_split_no_entries() {
+    let input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/no_entries.xml.gz");
+    let stats = run_with_input(&input, 20, false, true).expect("splitter failed for no_entries");
+    
+    assert_eq!(stats.total_entries, 0);
+    assert_eq!(stats.chunks, 1);
+}
+
+#[test]
+fn test_split_nested_entries() {
+    let input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/nested_entries.xml.gz");
+    let stats = run_with_input(&input, 20, false, true).expect("splitter failed for nested_entries");
+    
+    // In nested_entries.xml: <root><entry id="1">Outer<entry id="2">Inner</entry></entry></root>
+    // The splitter should treat the outermost <entry> as one entry, and its children are just bytes.
+    assert_eq!(stats.total_entries, 1);
+    assert_eq!(stats.chunks, 1);
+}
 
 // Gzipped XML
 
