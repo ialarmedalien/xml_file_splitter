@@ -130,6 +130,7 @@ pub fn split<R: BufRead>(
     chunk_size: usize,
     output_prefix: &str,
     gzip: bool,
+    validate: bool,
 ) -> Result<SplitStats> {
     let mut chunk_index = 1usize;
     let mut current = ChunkWriter::create(output_prefix, chunk_index, preamble, gzip)?;
@@ -143,7 +144,7 @@ pub fn split<R: BufRead>(
 
                 if current.entries_written == chunk_size {
                     // Finalise the full chunk and open the next one.
-                    current.finalise(preamble)?;
+                    current.finalise(preamble, validate)?;
                     chunk_index += 1;
                     current = ChunkWriter::create(output_prefix, chunk_index, preamble, gzip)?;
                 }
@@ -162,7 +163,7 @@ pub fn split<R: BufRead>(
         buf.clear();
     }
 
-    current.finalise(preamble)?;
+    current.finalise(preamble, validate)?;
 
     Ok(SplitStats {
         total_entries,
@@ -249,7 +250,7 @@ mod tests {
 
         let mut reader = make_reader(SAMPLE_XML);
         let preamble = read_preamble(&mut reader).unwrap();
-        let stats = split(&mut reader, &preamble, b"entry", 2, &prefix, false).unwrap();
+        let stats = split(&mut reader, &preamble, b"entry", 2, &prefix, false, false).unwrap();
 
         assert_eq!(stats.total_entries, 5);
         assert_eq!(stats.chunks, 3); // ceil(5/2) = 3
@@ -272,7 +273,7 @@ mod tests {
 
         let mut reader = make_reader(SAMPLE_XML);
         let preamble = read_preamble(&mut reader).unwrap();
-        let stats = split(&mut reader, &preamble, b"entry", 100, &prefix, false).unwrap();
+        let stats = split(&mut reader, &preamble, b"entry", 100, &prefix, false, false).unwrap();
 
         assert_eq!(stats.total_entries, 5);
         assert_eq!(stats.chunks, 1);

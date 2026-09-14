@@ -12,9 +12,6 @@ use flate2::read::GzDecoder;
 use xml_file_splitter::{splitter, writer};
 mod common;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /// Read a plain-text chunk file into a String.
 fn read_plain(path: &std::path::Path) -> String {
@@ -34,11 +31,11 @@ fn read_gz(path: &std::path::Path) -> String {
     content
 }
 
-/// Core helper: run the splitter and compare every output against golden files.
+/// Run the splitter and compare every output against golden files.
 ///
 /// When `gzip` is true the output chunks are decompressed before comparison,
 /// so the same plain-text golden files are reused for both modes.
-fn run_and_compare(chunk_size: usize, gzip: bool) -> Result<()> {
+fn run_and_compare(chunk_size: usize, gzip: bool, validate: bool) -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let prefix = tmp.path().join("chunk").to_str().unwrap().to_string();
 
@@ -54,7 +51,8 @@ fn run_and_compare(chunk_size: usize, gzip: bool) -> Result<()> {
         b"entry",
         chunk_size,
         &prefix,
-        gzip,           // ← new parameter
+        gzip,
+        validate,
     )?;
 
     let golden = common::golden_dir(chunk_size);
@@ -64,7 +62,8 @@ fn run_and_compare(chunk_size: usize, gzip: bool) -> Result<()> {
         let golden_path = writer::chunk_path(
             golden.join("chunk").to_str().unwrap(),
             chunk_index,
-            false,          // golden files are always plain XML
+            // gold files are plain XML
+            false,
         );
 
         // Decompress actual output when in gzip mode; golden is always plain.
@@ -108,43 +107,40 @@ fn assert_gzip_magic(path: &std::path::Path) {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Plain-output tests (existing, updated call sites only)
-// ---------------------------------------------------------------------------
-
+// XML output
 #[test]
 fn test_split_chunk_size_20() {
-    run_and_compare(20, false).expect("splitter failed for chunk_size=20");
+    run_and_compare(20, false, true).expect("splitter failed for chunk_size=20");
 }
 
 #[test]
 fn test_split_chunk_size_5() {
-    run_and_compare(5, false).expect("splitter failed for chunk_size=5");
+    run_and_compare(5, false, true).expect("splitter failed for chunk_size=5");
 }
 
 #[test]
 fn test_split_chunk_size_4() {
-    run_and_compare(4, false).expect("splitter failed for chunk_size=4");
+    run_and_compare(4, false, true).expect("splitter failed for chunk_size=4");
 }
 
-// ---------------------------------------------------------------------------
-// Gzip-output tests
-// ---------------------------------------------------------------------------
+
+// Gzipped XML
+
 
 /// Structural content of every gzip chunk matches the plain golden files.
 #[test]
 fn test_split_gzip_chunk_size_20() {
-    run_and_compare(20, true).expect("gzip splitter failed for chunk_size=20");
+    run_and_compare(20, true, true).expect("gzip splitter failed for chunk_size=20");
 }
 
 #[test]
 fn test_split_gzip_chunk_size_5() {
-    run_and_compare(5, true).expect("gzip splitter failed for chunk_size=5");
+    run_and_compare(5, true, true).expect("gzip splitter failed for chunk_size=5");
 }
 
 #[test]
 fn test_split_gzip_chunk_size_4() {
-    run_and_compare(4, true).expect("gzip splitter failed for chunk_size=4");
+    run_and_compare(4, true, true).expect("gzip splitter failed for chunk_size=4");
 }
 
 /// Output files carry the `.xml.gz` extension and are valid gzip streams.
@@ -159,7 +155,7 @@ fn test_split_gzip_output_files_are_valid_gz() {
     reader.config_mut().trim_text(false);
 
     let preamble = splitter::read_preamble(&mut reader).unwrap();
-    let stats = splitter::split(&mut reader, &preamble, b"entry", 20, &prefix, true).unwrap();
+    let stats = splitter::split(&mut reader, &preamble, b"entry", 20, &prefix, true, true).unwrap();
 
     for chunk_index in 1..=stats.chunks {
         let path = writer::chunk_path(&prefix, chunk_index, true);
@@ -188,7 +184,7 @@ fn test_split_plain_output_files_are_not_gz() {
     reader.config_mut().trim_text(false);
 
     let preamble = splitter::read_preamble(&mut reader).unwrap();
-    let stats = splitter::split(&mut reader, &preamble, b"entry", 20, &prefix, false).unwrap();
+    let stats = splitter::split(&mut reader, &preamble, b"entry", 20, &prefix, false, true).unwrap();
 
     for chunk_index in 1..=stats.chunks {
         let path = writer::chunk_path(&prefix, chunk_index, false);
