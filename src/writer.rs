@@ -1,10 +1,39 @@
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
 use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+
+/// Validates that a file is well-formed XML.
+/// If `gzip` is true, it decompresses the file on the fly.
+pub(crate) fn validate_xml_file(path: &PathBuf, gzip: bool) -> Result<()> {
+    use flate2::read::GzDecoder;
+    use quick_xml::reader::Reader;
+
+    let file = File::open(path)?;
+    let reader: Box<dyn std::io::BufRead> = if gzip {
+        Box::new(BufReader::new(GzDecoder::new(file)))
+    } else {
+        Box::new(BufReader::new(file))
+    };
+
+    let mut xml_reader = Reader::from_reader(reader);
+    xml_reader.config_mut().trim_text(false);
+
+    let mut buf = Vec::new();
+    loop {
+        match xml_reader.read_event_into(&mut buf) {
+            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(_) => {},
+            Err(e) => anyhow::bail!("XML validation failed for {}: {}", path.display(), e),
+        }
+        buf.clear();
+    }
+
+    Ok(())
+}
 
 /// Everything captured from the XML preamble (declaration + root open tag).
 pub struct Preamble {
@@ -104,12 +133,18 @@ impl ChunkWriter {
     }
 
     /// Write the root closing tag, flush, and (for gzip) finish the stream.
-    pub fn finalise(mut self, preamble: &Preamble) -> Result<()> {
+    pub fn finalise(mut self, preamble: &Preamble, validate: bool) -> Result<()> {
         write_closing_tag(&mut self.inner, &preamble.root_name)?;
         self.inner.finish()?;
 
-        let full_path = self.path.canonicalize().unwrap_or(self.path);
+        let full_path = self.path.canonicalize().unwrap_or_else(|_| self.path.clone());
         println!("Finished writing {}", full_path.display());
+
+        if validate {
+            println!("Validating {}...", full_path.display());
+            validate_xml_file(&full_path, full_path.extension().is_some_and(|ext| ext == "gz"))?;
+            println!("Validation successful.");
+        }
 
         Ok(())
     }
@@ -230,7 +265,7 @@ mod tests {
         cw.write_entry(b"<entry id=\"1\"><title>Alpha</title></entry>").unwrap();
         cw.write_entry(b"<entry id=\"2\"><title>Beta</title></entry>").unwrap();
         assert_eq!(cw.entries_written, 2);
-        cw.finalise(&preamble).unwrap();
+        cw.finalise(&preamble, false).unwrap();
 
         let out_path = chunk_path(&prefix, 1, false);
         let content = std::fs::read_to_string(&out_path).unwrap();
@@ -253,7 +288,7 @@ mod tests {
         cw.write_entry(b"<entry id=\"1\"><title>Alpha</title></entry>").unwrap();
         cw.write_entry(b"<entry id=\"2\"><title>Beta</title></entry>").unwrap();
         assert_eq!(cw.entries_written, 2);
-        cw.finalise(&preamble).unwrap();
+        cw.finalise(&preamble, false).unwrap();
 
         let out_path = chunk_path(&prefix, 1, true);
 
@@ -262,12 +297,10 @@ mod tests {
         let mut decoder = GzDecoder::new(BufReader::new(file));
         let mut content = String::new();
         decoder.read_to_string(&mut content).unwrap();
-
         assert!(content.contains("<catalog>"));
         assert!(content.contains("</catalog>"));
         assert!(content.contains("Alpha"));
         assert!(content.contains("Beta"));
-
         std::fs::remove_file(&out_path).unwrap();
     }
 
@@ -281,12 +314,60 @@ mod tests {
 
         let mut cw = ChunkWriter::create(&prefix, 1, &preamble, true).unwrap();
         cw.write_entry(b"<entry/>").unwrap();
-        cw.finalise(&preamble).unwrap();
+        cw.finalise(&preamble, false).unwrap();
 
         let out_path = chunk_path(&prefix, 1, true);
         let raw = std::fs::read(&out_path).unwrap();
         // Gzip magic number: 0x1f 0x8b
         assert_eq!(&raw[..2], &[0x1f, 0x8b], "output is not a valid gzip stream");
         std::fs::remove_file(&out_path).unwrap();
+    }
+
+    #[test]
+    fn test_validate_xml_file_valid_plain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("valid.xml");
+        std::fs::write(&path, b"<root><entry>hello</entry></root>").unwrap();
+
+        assert!(validate_xml_file(&path, false).is_ok());
+    }
+
+    #[test]
+    fn test_validate_xml_file_invalid_plain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("invalid.xml");
+        std::fs::write(&path, b"<root><entry>hello</root>").unwrap();
+
+        assert!(validate_xml_file(&path, false).is_err());
+    }
+
+    #[test]
+    fn test_validate_xml_file_valid_gzip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("valid.xml.gz");
+        
+        {
+            let file = File::create(&path).unwrap();
+            let mut encoder = GzEncoder::new(file, Compression::default());
+            encoder.write_all(b"<root><entry>hello</entry></root>").unwrap();
+            encoder.finish().unwrap();
+        }
+
+        assert!(validate_xml_file(&path, true).is_ok());
+    }
+
+    #[test]
+    fn test_validate_xml_file_invalid_gzip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("invalid.xml.gz");
+        
+        {
+            let file = File::create(&path).unwrap();
+            let mut encoder = GzEncoder::new(file, Compression::default());
+            encoder.write_all(b"<root><entry>hello</root>").unwrap();
+            encoder.finish().unwrap();
+        }
+
+        assert!(validate_xml_file(&path, true).is_err());
     }
 }
