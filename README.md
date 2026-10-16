@@ -52,9 +52,14 @@ path/to/output/dir/chunk_00003.xml.gz
 - `chunk-size`, default `100000`: number of elements per output file
 - `output-prefix`, default `part`: path to the output file and the prefix to use for each output file. The prefix is appended with `_nnnnn.xml`, a zero-padded digit representing the number of the file in the sequence.
 - `gzip`: whether or not the output files should be gzip compressed; include the parameter if the output files should be gzipped.
+- `validate`: whether or not to validate the output files; include the parameter to validate them.
 
 
 ## Changelog
+
+### v0.1.4
+
+- Add in output validation.
 
 ### v0.1.3
 

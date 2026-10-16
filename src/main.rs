@@ -27,6 +27,7 @@ fn main() -> Result<()> {
         args.chunk_size,
         &args.output_prefix,
         args.gzip,
+        args.validate,
     )?;
 
     println!(
