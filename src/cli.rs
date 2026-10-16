@@ -24,4 +24,8 @@ pub struct Args {
     /// Gzip-compress output files (adds .gz extension)
     #[arg(short, long)]
     pub gzip: bool,
+
+    /// Validate output files after writing
+    #[arg(short, long)]
+    pub validate: bool,
 }
