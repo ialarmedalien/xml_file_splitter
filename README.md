@@ -54,6 +54,27 @@ path/to/output/dir/chunk_00003.xml.gz
 - `gzip`: whether or not the output files should be gzip compressed; include the parameter if the output files should be gzipped.
 - `validate`: whether or not to validate the output files; include the parameter to validate them.
 
+### Testing
+
+Run the unit and binary integration tests:
+
+```sh
+cargo test
+```
+
+Run the end-to-end Docker integration tests (builds `xml_file_splitter` from source and installs it into `ghcr.io/kbase/cdm-data-loaders:main` via the `cdm-integration-test` stage in `Dockerfile`):
+
+```sh
+cargo test --test integration_docker -- --ignored
+```
+
+To test against an already-built image tag, set `DOCKER_TEST_IMAGE`:
+
+```sh
+docker build --target cdm-integration-test -t xml-file-splitter-cdm-test:latest .
+DOCKER_TEST_IMAGE=xml-file-splitter-cdm-test:latest cargo test --test integration_docker -- --ignored
+```
+
 
 ## Changelog
 

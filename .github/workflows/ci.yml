@@ -31,3 +31,29 @@ jobs:
             - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
             - run: cargo build --verbose
             - run: cargo test --verbose
+
+    docker_integration_test:
+        name: Docker integration tests (cdm-data-loaders)
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        env:
+            DOCKER_TEST_IMAGE: xml-file-splitter-cdm-test:latest
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4
+
+            - name: Build cdm-data-loaders integration test image
+              uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  target: cdm-integration-test
+                  load: true
+                  tags: ${{ env.DOCKER_TEST_IMAGE }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - name: Run Docker integration tests
+              run: cargo test --test integration_docker -- --ignored --nocapture
