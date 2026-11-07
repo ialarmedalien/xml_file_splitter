@@ -9,6 +9,8 @@
 ################################################################################
 # Create a stage for building the application.
 
+ARG CDM_BASE_IMAGE=ghcr.io/kbase/cdm-data-loaders:main
+
 FROM rust:trixie AS builder
 WORKDIR /app
 
@@ -19,8 +21,12 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN cargo build --release
 
+# Integration test stage using the pre-built kbase/cdm-data-loaders image
+FROM ${CDM_BASE_IMAGE} AS cdm-integration-test
+COPY --from=builder /app/target/release/xml_file_splitter /usr/local/bin/xml_file_splitter
+
 # Runtime stage
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS runtime
 
 # Install CA certificates and minimal dependencies
 RUN apt-get update && \
